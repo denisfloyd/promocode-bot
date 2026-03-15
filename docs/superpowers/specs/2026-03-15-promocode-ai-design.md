@@ -61,7 +61,7 @@ A public, open-source REST API that aggregates promotional codes from Brazilian 
 
 ## API Design
 
-Public REST API. No authentication. Global rate limiting at 60 requests/minute per IP.
+Public REST API. No authentication. Global rate limiting at 60 requests/minute per IP. When deployed behind a reverse proxy (Render, Railway, etc.), the app must be configured to trust `X-Forwarded-For` headers so rate limiting applies per real client IP, not per proxy IP.
 
 **Base URL:** `/api/v1`
 
@@ -97,7 +97,9 @@ Admin token is set via environment variable `ADMIN_TOKEN`.
 | `sort_by` | string | `?sort_by=confidence_score` |
 | `order` | string | `?order=desc` |
 | `page` | int | `?page=1` |
-| `per_page` | int | `?per_page=20` |
+| `per_page` | int | `?per_page=20` (max 100) |
+
+**Allowed `sort_by` values:** `confidence_score`, `created_at`, `discount_value`, `expires_at`.
 
 ### Response Format
 
@@ -112,6 +114,19 @@ Admin token is set via environment variable `ADMIN_TOKEN`.
   }
 }
 ```
+
+**Error response format:**
+
+```json
+{
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Rate limit of 60 requests/minute exceeded. Try again in 45 seconds."
+  }
+}
+```
+
+Standard HTTP codes: 404 (not found), 422 (validation error), 429 (rate limited), 500 (server error).
 
 FastAPI auto-generates Swagger docs at `/docs`.
 
@@ -136,6 +151,20 @@ BaseScraper (abstract)
 |---|---|
 | Amazon BR | Coupon landing pages, deal pages, promotional banners |
 | Mercado Livre | Cupons section, promotional campaigns, seller coupons |
+
+**Alternative sources (fallback):** If direct platform scraping is blocked by anti-bot measures, scrape third-party coupon aggregator sites and community forums that list codes for these platforms instead.
+
+### Anti-Bot Mitigation
+
+Both Amazon BR and Mercado Livre employ anti-scraping protections (CAPTCHAs, IP blocking, rate limiting, dynamic rendering). Strategies to handle this:
+
+- **Respectful scraping** — rate limit requests, use delays between requests, respect `robots.txt`
+- **User-Agent rotation** — rotate realistic browser user-agents
+- **Playwright fallback** — use headless browser for JavaScript-rendered pages
+- **Fallback sources** — if a platform blocks direct scraping, pivot to scraping third-party coupon sites that aggregate codes for that platform
+- **Source auto-disable** — after 5 consecutive failures, disable the source and log a warning for manual review
+
+**Legal note:** This project scrapes publicly available promotional information. Codes are public-facing marketing tools intended for consumer use. The project does not access private data, bypass authentication, or violate LGPD (Brazilian data protection law). However, users deploying this should review platform ToS in their jurisdiction.
 
 ### Tools
 
@@ -180,9 +209,9 @@ confidence = (vote_score * 0.4) + (freshness * 0.3) + (source_reliability * 0.3)
 
 | Factor | Weight | Calculation |
 |---|---|---|
-| `vote_score` | 40% | `votes_worked / (votes_worked + votes_failed)` — defaults to 0.5 with no votes |
-| `freshness` | 30% | 1.0 when just scraped, decays toward 0 as code ages or approaches `expires_at` |
-| `source_reliability` | 30% | Historical accuracy of the scraping source |
+| `vote_score` | 40% | Bayesian smoothed: `(votes_worked + 1) / (votes_worked + votes_failed + 2)` — naturally defaults to 0.5 with no votes, stabilizes with more data |
+| `freshness` | 30% | Linear decay: `max(0, 1 - (days_since_last_seen / 14))` — 1.0 when just scraped, reaches 0 after 14 days unseen. If `expires_at` is set and past, freshness is forced to 0 |
+| `source_reliability` | 30% | Average vote_score of all codes from this source that have >= 3 total votes. Starts at 0.5 for new sources. Recalculated after each scraper run |
 
 ### Score Lifecycle
 
@@ -195,9 +224,9 @@ confidence = (vote_score * 0.4) + (freshness * 0.3) + (source_reliability * 0.3)
 
 ### Anti-Gaming
 
-- 1 vote per IP per code per 24 hours
-- Minimum 3 votes before score is significantly influenced
-- Burst detection: ignore >10 votes on same code from same IP range in 1 minute
+- 1 vote per hashed IP per code per 24 hours (enforced via `ip_hash` + `code_id` + date unique constraint)
+- Bayesian smoothing naturally handles low vote counts — no artificial threshold needed
+- Burst detection: ignore >10 votes on same code from same hashed IP in 1 minute
 
 ### Recalculation Triggers
 
@@ -258,7 +287,7 @@ promocode-ai/
 | Component | Choice | Why |
 |---|---|---|
 | **Framework** | FastAPI | Async, auto-docs, type-safe |
-| **Database** | SQLite + SQLAlchemy | Zero cost, no server, file-based |
+| **Database** | SQLite (WAL mode) + SQLAlchemy | Zero cost, no server, file-based |
 | **Cache** | cachetools (in-memory) | No Redis needed |
 | **Scheduler** | APScheduler | Runs in-process, no Celery/Redis |
 | **HTTP scraping** | httpx | Async, modern |
@@ -275,6 +304,32 @@ promocode-ai/
 
 - Render / Railway / Fly.io
 - Or `python -m app.main` on any machine
+
+---
+
+## Database Configuration
+
+- SQLite in **WAL (Write-Ahead Logging) mode** (`PRAGMA journal_mode=WAL`) — enables concurrent reads while a write is in progress, preventing `database is locked` errors when scrapers write while the API serves reads.
+- SQLAlchemy with `connect_args={"check_same_thread": False}` for FastAPI's async context.
+- Tables created via `SQLAlchemy.create_all()` on startup for the MVP. Alembic migration support should be added before any production deployment with real data.
+
+## Configuration (Environment Variables)
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./promocode.db` | Database file path |
+| `ADMIN_TOKEN` | (required) | Secret token for admin endpoints |
+| `DEFAULT_SCRAPE_INTERVAL` | `30` | Default scrape interval in minutes |
+| `CACHE_TTL` | `300` | In-memory cache TTL in seconds |
+| `RATE_LIMIT` | `60/minute` | Global rate limit per IP |
+| `LOG_LEVEL` | `INFO` | Logging level |
+
+## Caching Strategy
+
+- **What is cached:** `GET /codes` query results and `GET /stats` response.
+- **TTL:** 5 minutes (300 seconds) by default, configurable via `CACHE_TTL`.
+- **Invalidation:** Cache is cleared after each scraper run completes (new data available).
+- **Implementation:** `cachetools.TTLCache` with key based on query parameters hash.
 
 ---
 
