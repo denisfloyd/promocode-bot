@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import PromoCode, Platform, CodeStatus
-from app.schemas import PlatformListResponse, PlatformInfo
+from app.models import CodeStatus, Platform, PromoCode
+from app.schemas import PlatformInfo, PlatformListResponse
 
 router = APIRouter(tags=["platforms"])
 

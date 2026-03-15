@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.cache import clear_cache
 from app.database import SessionLocal
-from app.models import PromoCode, ScrapingSource, CodeStatus
+from app.models import CodeStatus, PromoCode, ScrapingSource
 from app.services.confidence import calculate_confidence, calculate_vote_score
 
 logger = logging.getLogger(__name__)

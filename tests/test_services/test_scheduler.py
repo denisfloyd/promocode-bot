@@ -5,9 +5,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import PromoCode, ScrapingSource, CodeStatus, Platform, DiscountType
+from app.models import CodeStatus, DiscountType, Platform, PromoCode, ScrapingSource
 from app.services.scheduler import _save_codes, _update_source_reliability
-from app.services.confidence import calculate_vote_score
 
 
 @pytest.fixture

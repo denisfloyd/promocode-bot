@@ -1,4 +1,4 @@
-from app.models.promo_code import PromoCode, CodeFeedback, Platform, DiscountType, CodeStatus
+from app.models.promo_code import CodeFeedback, CodeStatus, DiscountType, Platform, PromoCode
 from app.models.scraping_source import ScrapingSource
 
 __all__ = [

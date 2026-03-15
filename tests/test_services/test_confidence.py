@@ -3,9 +3,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.services.confidence import (
-    calculate_vote_score,
-    calculate_freshness,
     calculate_confidence,
+    calculate_freshness,
+    calculate_vote_score,
 )
 
 

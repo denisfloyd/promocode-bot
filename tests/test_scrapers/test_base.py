@@ -1,4 +1,5 @@
 import pytest
+
 from app.scrapers.base import BaseScraper
 
 

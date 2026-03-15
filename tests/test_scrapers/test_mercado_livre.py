@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
 import pytest
+
 from app.scrapers.mercado_livre import MercadoLivreScraper
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"

@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import Boolean, Float, Integer, String, Enum
+
+from sqlalchemy import Boolean, Enum, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base

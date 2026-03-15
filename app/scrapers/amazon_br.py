@@ -1,6 +1,8 @@
 import re
+
 import httpx
 from bs4 import BeautifulSoup
+
 from app.scrapers.base import BaseScraper
 
 

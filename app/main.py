@@ -31,7 +31,7 @@ def create_app() -> FastAPI:
             content={
                 "error": {
                     "code": "rate_limit_exceeded",
-                    "message": f"Rate limit exceeded. Try again later.",
+                    "message": "Rate limit exceeded. Try again later.",
                 }
             },
         )
@@ -40,8 +40,8 @@ def create_app() -> FastAPI:
     def startup():
         init_db()
         logger.info("Database initialized")
-        from app.services.scheduler import start_scheduler
         from app.database import SessionLocal
+        from app.services.scheduler import start_scheduler
 
         db = SessionLocal()
         try:
@@ -53,10 +53,10 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    from app.api.admin import router as admin_router
     from app.api.codes import router as codes_router
     from app.api.platforms import router as platforms_router
     from app.api.stats import router as stats_router
-    from app.api.admin import router as admin_router
 
     app.include_router(codes_router, prefix="/api/v1")
     app.include_router(platforms_router, prefix="/api/v1")

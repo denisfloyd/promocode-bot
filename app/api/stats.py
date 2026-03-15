@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import PromoCode, CodeStatus
+from app.models import CodeStatus, PromoCode
 from app.schemas import StatsResponse
 
 router = APIRouter(tags=["stats"])

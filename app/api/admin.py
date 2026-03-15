@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import ScrapingSource
-from app.schemas import PlatformEnum, ErrorResponse
+from app.schemas import PlatformEnum
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
