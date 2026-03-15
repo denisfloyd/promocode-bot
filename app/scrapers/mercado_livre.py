@@ -1,9 +1,16 @@
+import json
 import re
 
 import httpx
 from bs4 import BeautifulSoup
 
 from app.scrapers.base import BaseScraper
+
+# Narrow categories to skip (wide-use filtering)
+NARROW_CATEGORIES = {
+    "supermercado", "supermarket", "despensa", "alimento", "food",
+    "pet shop", "pet", "bebida", "drink", "farmácia", "pharmacy",
+}
 
 
 class MercadoLivreScraper(BaseScraper):
@@ -22,37 +29,75 @@ class MercadoLivreScraper(BaseScraper):
 
     async def scrape(self) -> list[dict]:
         html = await self._fetch_html()
+        coupons = self._extract_coupons_from_next_data(html)
+        return [c for c in coupons if not self._is_narrow(c)]
+
+    def _extract_coupons_from_next_data(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "html.parser")
+        script = soup.find("script", id="__NEXT_DATA__")
+        if not script or not script.string:
+            return []
+
+        try:
+            data = json.loads(script.string)
+        except json.JSONDecodeError:
+            return []
+
+        coupons_data = (
+            data.get("props", {})
+            .get("pageProps", {})
+            .get("serverCoupons", {})
+            .get("coupons", [])
+        )
+
         results = []
-        for card in soup.select(".coupon-item"):
-            code_el = card.select_one(".coupon-code")
-            desc_el = card.select_one(".coupon-desc")
-            value_el = card.select_one(".coupon-value")
-            category_el = card.select_one(".coupon-category")
-            expiry_el = card.select_one(".coupon-expires")
-            min_purchase_el = card.select_one(".coupon-min-purchase")
-            if not code_el or not desc_el:
+        for c in coupons_data:
+            if c.get("couponStatusName") != "APPROVED":
                 continue
-            value_text = value_el.get_text(strip=True) if value_el else ""
-            discount_type, discount_value = self._parse_discount(value_text)
+
+            code = c.get("couponCode", "")
+            # Mercado Livre uses "CUPOM NO LINK" for most codes — still include them
+            # since they're valid coupons accessed through a redirect link
+            if not code:
+                continue
+
+            discount_text = c.get("couponDiscountShort", "")
+            discount_type, discount_value = self._parse_discount(discount_text)
+
+            min_purchase = self._extract_min_purchase(c.get("couponInstructions", ""))
+
             item = {
-                "code": code_el.get_text(strip=True),
-                "description": desc_el.get_text(strip=True),
+                "code": code,
+                "description": c.get("couponTitle", ""),
                 "discount_type": discount_type,
                 "discount_value": discount_value,
                 "source_url": self.source_url,
             }
-            if category_el:
-                item["category"] = category_el.get_text(strip=True)
-            if expiry_el:
-                item["expires_at"] = expiry_el.get_text(strip=True)
-            if min_purchase_el:
-                try:
-                    item["min_purchase"] = float(min_purchase_el.get_text(strip=True))
-                except ValueError:
-                    pass
+            if min_purchase:
+                item["min_purchase"] = min_purchase
+
             results.append(item)
+
         return results
+
+    def _is_narrow(self, coupon: dict) -> bool:
+        """Filter out store-specific, food, pet, and other narrow department codes."""
+        desc = coupon.get("description", "").lower()
+        for keyword in NARROW_CATEGORIES:
+            if keyword in desc:
+                return True
+        return False
+
+    def _extract_min_purchase(self, instructions: str) -> float | None:
+        if not instructions:
+            return None
+        match = re.search(r"[Cc]ompra m[ií]nima[:\s]*R?\$?\s*(\d+(?:[.,]\d+)?)", instructions)
+        if match:
+            return float(match.group(1).replace(",", "."))
+        match = re.search(r"m[ií]nimo[:\s]*R?\$?\s*(\d+(?:[.,]\d+)?)", instructions)
+        if match:
+            return float(match.group(1).replace(",", "."))
+        return None
 
     def _parse_discount(self, text: str) -> tuple[str, float]:
         text_lower = text.lower()

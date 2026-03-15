@@ -22,13 +22,13 @@ def _seed_sources(db):
         {
             "platform": Platform.AMAZON_BR,
             "name": "Amazon Brasil Coupons",
-            "url": "https://www.amazon.com.br/coupons",
+            "url": "https://www.promobit.com.br/cupons/loja/amazon/",
             "scraper_type": "amazon_br",
         },
         {
             "platform": Platform.MERCADO_LIVRE,
             "name": "Mercado Livre Cupons",
-            "url": "https://www.mercadolivre.com.br/cupons",
+            "url": "https://www.promobit.com.br/cupons/loja/mercado-livre/",
             "scraper_type": "mercado_livre",
         },
     ]
