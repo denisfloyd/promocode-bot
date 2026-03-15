@@ -34,9 +34,7 @@ def calculate_confidence(
 ) -> float:
     vote_score = calculate_vote_score(votes_worked, votes_failed)
     freshness = calculate_freshness(updated_at, expires_at)
-    base_score = vote_score * 0.5 + source_reliability * 0.5
-    freshness_factor = freshness * 0.7 + 0.3
-    return base_score * freshness_factor
+    return (vote_score * 0.4) + (freshness * 0.3) + (source_reliability * 0.3)
 
 
 def recalculate_confidence(code, source_reliability: float = 0.5) -> float:

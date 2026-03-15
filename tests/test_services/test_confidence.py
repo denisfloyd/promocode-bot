@@ -62,11 +62,13 @@ class TestFreshness:
 
 class TestConfidence:
     def test_new_code_default(self):
+        # vote_score=0.5, freshness=1.0, source_reliability=0.5
+        # 0.5*0.4 + 1.0*0.3 + 0.5*0.3 = 0.2 + 0.3 + 0.15 = 0.65
         score = calculate_confidence(
             votes_worked=0, votes_failed=0,
             updated_at=_now(), source_reliability=0.5,
         )
-        assert score == pytest.approx(0.5, abs=0.01)
+        assert score == pytest.approx(0.65, abs=0.01)
 
     def test_high_confidence_code(self):
         score = calculate_confidence(
