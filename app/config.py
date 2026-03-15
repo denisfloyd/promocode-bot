@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     rate_limit: str = "60/minute"
     log_level: str = "INFO"
 
+    # Telegram (optional — get from https://my.telegram.org)
+    telegram_api_id: int | None = None
+    telegram_api_hash: str | None = None
+    telegram_channels: str = ""  # Comma-separated channel usernames
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
