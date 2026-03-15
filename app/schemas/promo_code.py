@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 
 class PlatformEnum(str, enum.Enum):
@@ -50,6 +50,17 @@ class PromoCodeResponse(BaseModel):
     votes_failed: int
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def source(self) -> str:
+        if "promobit" in self.source_url:
+            return "promobit"
+        if self.source_url == "telegram":
+            return "telegram"
+        if self.source_url == "community":
+            return "community"
+        return "unknown"
 
     model_config = {"from_attributes": True}
 
