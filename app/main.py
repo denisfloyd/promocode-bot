@@ -40,6 +40,14 @@ def create_app() -> FastAPI:
     def startup():
         init_db()
         logger.info("Database initialized")
+        from app.services.scheduler import start_scheduler
+        from app.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            start_scheduler(db)
+        finally:
+            db.close()
 
     @app.get("/health")
     def health():
