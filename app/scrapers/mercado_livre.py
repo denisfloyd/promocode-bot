@@ -56,10 +56,16 @@ class MercadoLivreScraper(BaseScraper):
                 continue
 
             code = c.get("couponCode", "")
-            # Mercado Livre uses "CUPOM NO LINK" for most codes — still include them
-            # since they're valid coupons accessed through a redirect link
             if not code:
                 continue
+            # Mercado Livre uses "CUPOM NO LINK" for most codes — make them unique
+            # by appending the Promobit coupon ID
+            if code == "CUPOM NO LINK":
+                coupon_id = c.get("couponId", "")
+                if coupon_id:
+                    code = f"CUPOM-ML-{coupon_id}"
+                else:
+                    continue
 
             discount_text = c.get("couponDiscountShort", "")
             discount_type, discount_value = self._parse_discount(discount_text)

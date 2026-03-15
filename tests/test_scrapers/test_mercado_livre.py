@@ -22,9 +22,10 @@ def sample_html():
 async def test_scrape_extracts_from_next_data(scraper, sample_html):
     with patch.object(scraper, "_fetch_html", new_callable=AsyncMock, return_value=sample_html):
         results = await scraper.scrape()
-        # 5 coupons: 3 CUPOM NO LINK (approved), 1 FRETEML (approved), 1 VELHO (expired)
-        # Supermercado one is filtered (narrow), VELHO filtered (expired)
-        # ML keeps CUPOM NO LINK codes (unlike Amazon) — so: 2 CUPOM NO LINK + FRETEML = 3
+        # 5 coupons: 3 CUPOM NO LINK (approved, renamed to CUPOM-ML-{id}),
+        # 1 FRETEML (approved), 1 VELHO (expired)
+        # Supermercado (id=62767) is filtered (narrow), VELHO filtered (expired)
+        # Remaining: CUPOM-ML-62773, CUPOM-ML-62771, FRETEML = 3
         assert len(results) == 3
 
 
@@ -64,12 +65,15 @@ async def test_scrape_extracts_min_purchase(scraper, sample_html):
 
 
 @pytest.mark.asyncio
-async def test_scrape_keeps_cupom_no_link(scraper, sample_html):
-    """ML scraper keeps CUPOM NO LINK codes since most ML coupons use this pattern."""
+async def test_scrape_makes_cupom_no_link_unique(scraper, sample_html):
+    """ML scraper converts CUPOM NO LINK to CUPOM-ML-{id} for uniqueness."""
     with patch.object(scraper, "_fetch_html", new_callable=AsyncMock, return_value=sample_html):
         results = await scraper.scrape()
-        cupom_no_link = [r for r in results if r["code"] == "CUPOM NO LINK"]
-        assert len(cupom_no_link) >= 1
+        ml_codes = [r["code"] for r in results if r["code"].startswith("CUPOM-ML-")]
+        assert len(ml_codes) >= 1
+        # No raw "CUPOM NO LINK" should remain
+        raw_codes = [r["code"] for r in results if r["code"] == "CUPOM NO LINK"]
+        assert len(raw_codes) == 0
 
 
 @pytest.mark.asyncio
