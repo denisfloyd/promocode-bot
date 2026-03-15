@@ -15,6 +15,40 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit])
 
 
+def _seed_sources(db):
+    from app.models import Platform, ScrapingSource
+
+    default_sources = [
+        {
+            "platform": Platform.AMAZON_BR,
+            "name": "Amazon Brasil Coupons",
+            "url": "https://www.amazon.com.br/coupons",
+            "scraper_type": "amazon_br",
+        },
+        {
+            "platform": Platform.MERCADO_LIVRE,
+            "name": "Mercado Livre Cupons",
+            "url": "https://www.mercadolivre.com.br/cupons",
+            "scraper_type": "mercado_livre",
+        },
+    ]
+
+    for src in default_sources:
+        exists = (
+            db.query(ScrapingSource)
+            .filter(
+                ScrapingSource.platform == src["platform"],
+                ScrapingSource.url == src["url"],
+            )
+            .first()
+        )
+        if not exists:
+            db.add(ScrapingSource(**src))
+            logger.info(f"Seeded source: {src['name']}")
+
+    db.commit()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="PromoCode AI",
@@ -41,10 +75,12 @@ def create_app() -> FastAPI:
         init_db()
         logger.info("Database initialized")
         from app.database import SessionLocal
-        from app.services.scheduler import start_scheduler
 
         db = SessionLocal()
         try:
+            _seed_sources(db)
+            from app.services.scheduler import start_scheduler
+
             start_scheduler(db)
         finally:
             db.close()
