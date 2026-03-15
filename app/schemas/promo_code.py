@@ -83,6 +83,21 @@ class StatsResponse(BaseModel):
     platforms: dict[str, int]
 
 
+class CodeSubmissionRequest(BaseModel):
+    code: str
+    platform: PlatformEnum
+    description: str
+    discount_type: DiscountTypeEnum
+    discount_value: float
+    min_purchase: float | None = None
+    category: str | None = None
+
+
+class CodeSubmissionResponse(BaseModel):
+    message: str
+    id: str
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str

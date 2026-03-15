@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import CodeFeedback, PromoCode
+from app.models.promo_code import CodeStatus
 from app.schemas import (
     CodeStatusEnum,
+    CodeSubmissionRequest,
+    CodeSubmissionResponse,
     DiscountTypeEnum,
     ErrorResponse,
     FeedbackRequest,
@@ -24,6 +27,54 @@ from app.schemas import (
 from app.services.confidence import recalculate_confidence
 
 router = APIRouter(tags=["codes"])
+
+
+@router.post(
+    "/codes",
+    response_model=CodeSubmissionResponse,
+    status_code=201,
+    responses={409: {"model": ErrorResponse}},
+)
+def submit_code(
+    submission: CodeSubmissionRequest,
+    db: Session = Depends(get_db),
+):
+    existing = (
+        db.query(PromoCode)
+        .filter(
+            PromoCode.code == submission.code,
+            PromoCode.platform == submission.platform.value,
+        )
+        .first()
+    )
+    if existing:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": {
+                    "code": "duplicate_code",
+                    "message": f"Code '{submission.code}' already exists for {submission.platform.value}",
+                }
+            },
+        )
+
+    code = PromoCode(
+        code=submission.code,
+        platform=submission.platform.value,
+        description=submission.description,
+        discount_type=submission.discount_type.value,
+        discount_value=submission.discount_value,
+        min_purchase=submission.min_purchase,
+        category=submission.category,
+        source_url="community",
+        confidence_score=0.5,
+        status=CodeStatus.ACTIVE,
+    )
+    db.add(code)
+    db.commit()
+    db.refresh(code)
+
+    return CodeSubmissionResponse(message="Code submitted", id=code.id)
 
 SORT_COLUMN_MAP = {
     SortByEnum.CONFIDENCE_SCORE: PromoCode.confidence_score,

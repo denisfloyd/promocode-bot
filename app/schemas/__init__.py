@@ -1,6 +1,8 @@
 from app.schemas.feedback import FeedbackRequest, FeedbackResponse
 from app.schemas.promo_code import (
     CodeStatusEnum,
+    CodeSubmissionRequest,
+    CodeSubmissionResponse,
     DiscountTypeEnum,
     ErrorDetail,
     ErrorResponse,
@@ -31,4 +33,6 @@ __all__ = [
     "OrderEnum",
     "FeedbackRequest",
     "FeedbackResponse",
+    "CodeSubmissionRequest",
+    "CodeSubmissionResponse",
 ]
