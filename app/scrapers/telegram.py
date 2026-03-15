@@ -1,6 +1,5 @@
 import logging
 import re
-from datetime import datetime, timezone
 
 from app.config import settings
 
@@ -8,15 +7,16 @@ logger = logging.getLogger(__name__)
 
 # Common promo code patterns in Brazilian Telegram messages
 CODE_PATTERNS = [
-    # "Cupom: CODIGO" or "Código: CODIGO"
+    # Codes in backticks (very common in these channels): `VAIBRASIL`
+    re.compile(r"`([A-Z0-9_]{4,30})`"),
+    # "cupom: CODIGO" or "código: CODIGO" or "cupom CODIGO"
     re.compile(r"(?:cupom|código|code|cupão)[:\s]+([A-Z0-9_]{4,30})", re.IGNORECASE),
-    # "Use o código CODIGO"
-    re.compile(r"use\s+(?:o\s+)?(?:cupom|código|code)\s+([A-Z0-9_]{4,30})", re.IGNORECASE),
-    # "CODIGO para ganhar X% OFF"
-    re.compile(r"\b([A-Z0-9_]{4,30})\s+(?:para|pra)\s+(?:ganhar|ter|conseguir)", re.IGNORECASE),
-    # Codes in quotes or brackets
+    # "Use o cupom CODIGO" or "Usem o cupom: CODIGO" (with optional markdown **)
+    re.compile(r"use[m]?\s+(?:o\s+)?(?:cupom|código|code)[:\s*]+([A-Z0-9_]{4,30})", re.IGNORECASE),
+    # "Use o cupom:** CODIGO" — markdown bold variant
+    re.compile(r"cupom[:\s*]+\s*([A-Z][A-Z0-9_]{3,29})\b", re.IGNORECASE),
+    # Codes in quotes
     re.compile(r"[\"']([A-Z0-9_]{4,30})[\"']"),
-    re.compile(r"\[([A-Z0-9_]{4,30})\]"),
 ]
 
 # Words that look like codes but aren't
@@ -26,18 +26,23 @@ FALSE_POSITIVES = {
     "HTTP", "HTTPS", "WWW", "COM", "BRASIL", "FREE",
     "HOJE", "AQUI", "TUDO", "MAIS", "TODOS", "TODO", "ESSA", "ESSE",
     "COMO", "PARA", "PEGA", "VALE", "SUPER", "MEGA", "MELHOR",
+    "SHOPEE", "NOVO", "NOVA", "CADA", "ACABA", "ATENÇÃO",
+    "NOITE", "MELI", "BAIXOU", "PREÇO", "ULTIMO",
 }
 
 PLATFORM_KEYWORDS = {
-    "amazon_br": ["amazon", "amz", "amazon.com.br"],
-    "mercado_livre": ["mercado livre", "mercadolivre", "meli", "ml"],
+    "amazon_br": ["amazon", "amz", "amazon.com.br", "achado amazon", "amzn.to"],
+    "mercado_livre": [
+        "mercado livre", "mercadolivre", "mercadolivre.com",
+        "achado mercado livr", "vamosmeli", "mercado livr",
+    ],
 }
 
 DISCOUNT_PATTERNS = [
+    # "R$50 OFF" or "R$ 350 OFF" (check fixed amount first — more specific)
+    (re.compile(r"R\$\s*(\d+(?:[.,]\d+)?)\s*(?:off|de desconto|desconto|reais)", re.IGNORECASE), "fixed_amount"),
     # "50% OFF" or "50% de desconto"
-    (re.compile(r"(\d+(?:[.,]\d+)?)\s*%\s*(?:off|desconto|de desconto)", re.IGNORECASE), "percentage"),
-    # "R$50 OFF" or "R$ 50 de desconto"
-    (re.compile(r"R?\$\s*(\d+(?:[.,]\d+)?)\s*(?:off|desconto|de desconto|reais)", re.IGNORECASE), "fixed_amount"),
+    (re.compile(r"(\d+(?:[.,]\d+)?)\s*%\s*(?:off|desconto|de desconto)?", re.IGNORECASE), "percentage"),
     # "Frete grátis"
     (re.compile(r"frete\s+(?:grátis|gratuito|free|gr[aá]tis)", re.IGNORECASE), "free_shipping"),
 ]
@@ -91,10 +96,11 @@ def parse_telegram_message(text: str) -> list[dict]:
 
     discount_type, discount_value = parse_discount(text)
 
-    # Use first ~100 chars as description
-    description = text[:100].strip()
-    if len(text) > 100:
-        description += "..."
+    # Clean description: remove markdown, take first meaningful line
+    clean = re.sub(r"[*_`~]", "", text)  # remove markdown
+    clean = re.sub(r"https?://\S+", "", clean)  # remove URLs
+    lines = [l.strip() for l in clean.split("\n") if l.strip() and len(l.strip()) > 5]
+    description = lines[0][:120] if lines else text[:120]
 
     results = []
     for code in codes:
@@ -131,17 +137,29 @@ async def monitor_telegram_channels():
         for channel_name in channels:
             try:
                 channel = await client.get_entity(channel_name)
-                # Get last 50 messages
+                channel_codes = []
                 async for message in client.iter_messages(channel, limit=50):
                     if message.text:
                         parsed = parse_telegram_message(message.text)
-                        all_codes.extend(parsed)
-                logger.info(f"Fetched messages from @{channel_name}, found {len(all_codes)} codes")
+                        channel_codes.extend(parsed)
+                all_codes.extend(channel_codes)
+                logger.info(f"@{channel_name}: found {len(channel_codes)} codes in 50 messages")
             except Exception as e:
                 logger.error(f"Failed to fetch from @{channel_name}: {e}")
 
         await client.disconnect()
-        return all_codes
+
+        # Deduplicate by code+platform
+        seen = set()
+        unique = []
+        for c in all_codes:
+            key = (c["code"], c["platform"])
+            if key not in seen:
+                seen.add(key)
+                unique.append(c)
+
+        logger.info(f"Telegram total: {len(unique)} unique codes from {len(channels)} channels")
+        return unique
 
     except Exception as e:
         logger.error(f"Telegram connection failed: {e}")
