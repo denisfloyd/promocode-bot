@@ -79,9 +79,14 @@ def create_app() -> FastAPI:
         db = SessionLocal()
         try:
             _seed_sources(db)
-            from app.services.scheduler import start_scheduler
+            from app.services.scheduler import start_scheduler, trigger_scrape, run_telegram_job, _executor
 
             start_scheduler(db)
+
+            # Initial scrape on startup
+            logger.info("Triggering initial scrape...")
+            trigger_scrape()
+            _executor.submit(run_telegram_job)
         finally:
             db.close()
 
