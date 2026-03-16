@@ -31,6 +31,17 @@ def trigger_scrape_all(x_admin_token: str | None = Header(None), db: Session = D
     return {"message": "Scraping triggered for all platforms + Telegram"}
 
 
+@router.post("/scrape/telegram")
+def trigger_scrape_telegram(x_admin_token: str | None = Header(None)):
+    err = _check_admin(x_admin_token)
+    if err:
+        return err
+    from app.services.scheduler import run_telegram_job, _executor
+
+    _executor.submit(run_telegram_job)
+    return {"message": "Telegram scraping triggered"}
+
+
 @router.post("/scrape/{platform}")
 def trigger_scrape_platform(
     platform: PlatformEnum, x_admin_token: str | None = Header(None), db: Session = Depends(get_db)
@@ -42,17 +53,6 @@ def trigger_scrape_platform(
 
     trigger_scrape(platform=platform.value)
     return {"message": f"Scraping triggered for {platform.value}"}
-
-
-@router.post("/scrape/telegram")
-def trigger_scrape_telegram(x_admin_token: str | None = Header(None)):
-    err = _check_admin(x_admin_token)
-    if err:
-        return err
-    from app.services.scheduler import run_telegram_job, _executor
-
-    _executor.submit(run_telegram_job)
-    return {"message": "Telegram scraping triggered"}
 
 
 @router.get("/scrape/status")
