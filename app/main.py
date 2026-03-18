@@ -15,40 +15,6 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit])
 
 
-def _seed_sources(db):
-    from app.models import Platform, ScrapingSource
-
-    default_sources = [
-        {
-            "platform": Platform.AMAZON_BR,
-            "name": "Amazon Brasil Coupons",
-            "url": "https://www.promobit.com.br/cupons/loja/amazon/",
-            "scraper_type": "amazon_br",
-        },
-        {
-            "platform": Platform.MERCADO_LIVRE,
-            "name": "Mercado Livre Cupons",
-            "url": "https://www.promobit.com.br/cupons/loja/mercado-livre/",
-            "scraper_type": "mercado_livre",
-        },
-    ]
-
-    for src in default_sources:
-        exists = (
-            db.query(ScrapingSource)
-            .filter(
-                ScrapingSource.platform == src["platform"],
-                ScrapingSource.url == src["url"],
-            )
-            .first()
-        )
-        if not exists:
-            db.add(ScrapingSource(**src))
-            logger.info(f"Seeded source: {src['name']}")
-
-    db.commit()
-
-
 def create_app() -> FastAPI:
     app = FastAPI(
         title="PromoCode AI",
@@ -74,18 +40,15 @@ def create_app() -> FastAPI:
     def startup():
         init_db()
         logger.info("Database initialized")
+        from app.services.scheduler import start_scheduler, run_telegram_job, _executor
         from app.database import SessionLocal
 
         db = SessionLocal()
         try:
-            _seed_sources(db)
-            from app.services.scheduler import start_scheduler, trigger_scrape, run_telegram_job, _executor
-
             start_scheduler(db)
 
-            # Initial scrape on startup
-            logger.info("Triggering initial scrape...")
-            trigger_scrape()
+            # Initial Telegram scrape on startup
+            logger.info("Triggering initial Telegram scrape...")
             _executor.submit(run_telegram_job)
         finally:
             db.close()

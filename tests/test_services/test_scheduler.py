@@ -1,12 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import CodeStatus, DiscountType, Platform, PromoCode, ScrapingSource
-from app.services.scheduler import _save_codes, _update_source_reliability
+from app.models import CodeStatus, DiscountType, Platform, PromoCode
+from app.services.scheduler import _save_telegram_codes, cleanup_old_codes
 
 
 @pytest.fixture
@@ -26,87 +26,131 @@ def scheduler_db():
     session.close()
 
 
-@pytest.fixture
-def source(scheduler_db):
-    s = ScrapingSource(
-        platform="amazon_br",
-        name="Test Source",
-        url="https://example.com",
-        scraper_type="amazon_br",
-        reliability_score=0.5,
-    )
-    scheduler_db.add(s)
-    scheduler_db.commit()
-    scheduler_db.refresh(s)
-    return s
-
-
-def test_save_codes_inserts_new(scheduler_db, source):
+def test_save_telegram_codes_inserts_new(scheduler_db):
     parsed = [
         {
-            "code": "TEST10",
+            "code": "LEVE20",
             "platform": "amazon_br",
-            "description": "10% off",
+            "description": "20% off",
             "discount_type": "percentage",
-            "discount_value": 10.0,
-            "source_url": "https://example.com",
+            "discount_value": 20.0,
         }
     ]
-    _save_codes(scheduler_db, parsed, source)
+    _save_telegram_codes(scheduler_db, parsed)
     codes = scheduler_db.query(PromoCode).all()
     assert len(codes) == 1
-    assert codes[0].code == "TEST10"
+    assert codes[0].code == "LEVE20"
+    assert codes[0].source_url == "telegram"
 
 
-def test_save_codes_deduplicates(scheduler_db, source):
+def test_save_telegram_codes_deduplicates(scheduler_db):
     parsed = [
         {
-            "code": "TEST10",
+            "code": "LEVE20",
             "platform": "amazon_br",
-            "description": "10% off",
+            "description": "20% off",
             "discount_type": "percentage",
-            "discount_value": 10.0,
-            "source_url": "https://example.com",
+            "discount_value": 20.0,
         }
     ]
-    _save_codes(scheduler_db, parsed, source)
-    _save_codes(scheduler_db, parsed, source)
+    _save_telegram_codes(scheduler_db, parsed)
+    _save_telegram_codes(scheduler_db, parsed)
     codes = scheduler_db.query(PromoCode).all()
     assert len(codes) == 1
 
 
-def test_save_codes_expires_old_codes(scheduler_db, source):
+def test_save_telegram_codes_updates_existing(scheduler_db):
+    parsed = [
+        {
+            "code": "LEVE20",
+            "platform": "amazon_br",
+            "description": "20% off",
+            "discount_type": "percentage",
+            "discount_value": 20.0,
+        }
+    ]
+    _save_telegram_codes(scheduler_db, parsed)
+    first_update = scheduler_db.query(PromoCode).first().updated_at
+    _save_telegram_codes(scheduler_db, parsed)
+    scheduler_db.expire_all()
+    second_update = scheduler_db.query(PromoCode).first().updated_at
+    assert second_update >= first_update
+
+
+def test_cleanup_deletes_old_codes_no_votes(scheduler_db, monkeypatch):
+    """Codes older than 24h with 0 worked votes get deleted."""
+    old_time = datetime.now(timezone.utc) - timedelta(hours=25)
     code = PromoCode(
-        code="OLD",
+        code="OLDCODE",
         platform=Platform.AMAZON_BR,
         description="Old code",
         discount_type=DiscountType.PERCENTAGE,
         discount_value=10.0,
-        source_url="https://example.com",
-        expires_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
-        status=CodeStatus.ACTIVE,
+        source_url="telegram",
+        votes_worked=0,
+        votes_failed=0,
+        updated_at=old_time,
     )
     scheduler_db.add(code)
     scheduler_db.commit()
-    _save_codes(scheduler_db, [], source)
-    scheduler_db.refresh(code)
-    assert code.status == CodeStatus.EXPIRED
+
+    # Monkeypatch SessionLocal to return our test session
+    monkeypatch.setattr("app.services.scheduler.SessionLocal", lambda: scheduler_db)
+    # Prevent close from actually closing (we still need the session)
+    monkeypatch.setattr(scheduler_db, "close", lambda: None)
+
+    cleanup_old_codes()
+
+    codes = scheduler_db.query(PromoCode).all()
+    assert len(codes) == 0
 
 
-def test_update_source_reliability(scheduler_db, source):
-    for i in range(4):
-        code = PromoCode(
-            code=f"CODE{i}",
-            platform=Platform.AMAZON_BR,
-            description=f"Code {i}",
-            discount_type=DiscountType.PERCENTAGE,
-            discount_value=10.0,
-            source_url=source.url,
-            votes_worked=8,
-            votes_failed=2,
-        )
-        scheduler_db.add(code)
+def test_cleanup_keeps_recent_codes(scheduler_db, monkeypatch):
+    """Codes less than 24h old are kept."""
+    code = PromoCode(
+        code="NEWCODE",
+        platform=Platform.AMAZON_BR,
+        description="New code",
+        discount_type=DiscountType.PERCENTAGE,
+        discount_value=10.0,
+        source_url="telegram",
+        votes_worked=0,
+        votes_failed=0,
+    )
+    scheduler_db.add(code)
     scheduler_db.commit()
-    _update_source_reliability(scheduler_db, source)
-    scheduler_db.refresh(source)
-    assert source.reliability_score > 0.5
+
+    monkeypatch.setattr("app.services.scheduler.SessionLocal", lambda: scheduler_db)
+    monkeypatch.setattr(scheduler_db, "close", lambda: None)
+
+    cleanup_old_codes()
+
+    codes = scheduler_db.query(PromoCode).all()
+    assert len(codes) == 1
+
+
+def test_cleanup_keeps_old_codes_with_votes(scheduler_db, monkeypatch):
+    """Codes older than 24h but with positive votes are kept."""
+    old_time = datetime.now(timezone.utc) - timedelta(hours=48)
+    code = PromoCode(
+        code="VOTED",
+        platform=Platform.AMAZON_BR,
+        description="Voted code",
+        discount_type=DiscountType.PERCENTAGE,
+        discount_value=10.0,
+        source_url="telegram",
+        votes_worked=3,
+        votes_failed=1,
+        updated_at=old_time,
+    )
+    scheduler_db.add(code)
+    scheduler_db.commit()
+
+    monkeypatch.setattr("app.services.scheduler.SessionLocal", lambda: scheduler_db)
+    monkeypatch.setattr(scheduler_db, "close", lambda: None)
+
+    cleanup_old_codes()
+
+    codes = scheduler_db.query(PromoCode).all()
+    assert len(codes) == 1
+    assert codes[0].code == "VOTED"

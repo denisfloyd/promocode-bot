@@ -12,28 +12,29 @@ def test_admin_scrape_wrong_token(client):
 
 
 def test_admin_scrape_valid_token(client):
-    response = client.post("/api/v1/admin/scrape", headers={"X-Admin-Token": settings.admin_token})
+    response = client.post(
+        "/api/v1/admin/scrape", headers={"X-Admin-Token": settings.admin_token}
+    )
     assert response.status_code == 200
     data = response.json()
     assert "message" in data
 
 
-def test_admin_scrape_platform(client):
-    response = client.post("/api/v1/admin/scrape/amazon_br", headers={"X-Admin-Token": settings.admin_token})
+def test_admin_scrape_telegram(client):
+    response = client.post(
+        "/api/v1/admin/scrape/telegram", headers={"X-Admin-Token": settings.admin_token}
+    )
     assert response.status_code == 200
-
-
-def test_admin_scrape_invalid_platform(client):
-    response = client.post("/api/v1/admin/scrape/invalid_platform", headers={"X-Admin-Token": settings.admin_token})
-    assert response.status_code == 422
 
 
 def test_admin_scrape_status(client):
-    response = client.get("/api/v1/admin/scrape/status", headers={"X-Admin-Token": settings.admin_token})
+    response = client.get(
+        "/api/v1/admin/scrape/status", headers={"X-Admin-Token": settings.admin_token}
+    )
     assert response.status_code == 200
     data = response.json()
-    assert "last_run" in data
-    assert "sources" in data
+    assert "telegram_enabled" in data
+    assert "channels" in data
 
 
 def test_admin_scrape_status_requires_token(client):

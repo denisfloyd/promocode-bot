@@ -1,11 +1,7 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import get_db
-from app.models import ScrapingSource
-from app.schemas import PlatformEnum
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -20,15 +16,14 @@ def _check_admin(token: str | None):
 
 
 @router.post("/scrape")
-def trigger_scrape_all(x_admin_token: str | None = Header(None), db: Session = Depends(get_db)):
+def trigger_scrape_all(x_admin_token: str | None = Header(None)):
     err = _check_admin(x_admin_token)
     if err:
         return err
-    from app.services.scheduler import trigger_scrape, run_telegram_job, _executor
+    from app.services.scheduler import run_telegram_job, _executor
 
-    trigger_scrape()
     _executor.submit(run_telegram_job)
-    return {"message": "Scraping triggered for all platforms + Telegram"}
+    return {"message": "Scraping triggered (Telegram)"}
 
 
 @router.post("/scrape/telegram")
@@ -42,35 +37,16 @@ def trigger_scrape_telegram(x_admin_token: str | None = Header(None)):
     return {"message": "Telegram scraping triggered"}
 
 
-@router.post("/scrape/{platform}")
-def trigger_scrape_platform(
-    platform: PlatformEnum, x_admin_token: str | None = Header(None), db: Session = Depends(get_db)
-):
-    err = _check_admin(x_admin_token)
-    if err:
-        return err
-    from app.services.scheduler import trigger_scrape
-
-    trigger_scrape(platform=platform.value)
-    return {"message": f"Scraping triggered for {platform.value}"}
-
-
 @router.get("/scrape/status")
-def scrape_status(x_admin_token: str | None = Header(None), db: Session = Depends(get_db)):
+def scrape_status(x_admin_token: str | None = Header(None)):
     err = _check_admin(x_admin_token)
     if err:
         return err
-    sources = db.query(ScrapingSource).all()
+    from app.config import settings as app_settings
+
+    channels = [c.strip() for c in app_settings.telegram_channels.split(",") if c.strip()]
     return {
-        "last_run": None,
-        "sources": [
-            {
-                "name": s.name,
-                "platform": s.platform,
-                "is_active": s.is_active,
-                "consecutive_failures": s.consecutive_failures,
-                "schedule_minutes": s.schedule_minutes,
-            }
-            for s in sources
-        ],
+        "telegram_enabled": bool(app_settings.telegram_api_id),
+        "channels": channels,
+        "scrape_interval_minutes": app_settings.default_scrape_interval,
     }
