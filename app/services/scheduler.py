@@ -26,11 +26,15 @@ def run_telegram_job():
     try:
         from app.scrapers.telegram import monitor_telegram_channels
 
-        parsed = asyncio.run(monitor_telegram_channels())
-        if parsed:
-            _save_telegram_codes(db, parsed)
+        result = asyncio.run(monitor_telegram_channels())
+        active_codes, expired_pairs = result
+        if active_codes:
+            _save_telegram_codes(db, active_codes)
+        if expired_pairs:
+            _expire_codes(db, expired_pairs)
+        if active_codes or expired_pairs:
             clear_cache()
-            logger.info(f"Telegram: saved {len(parsed)} codes")
+            logger.info(f"Telegram: {len(active_codes)} active, {len(expired_pairs)} expired")
     except Exception as e:
         logger.error(f"Telegram job failed: {e}")
     finally:
@@ -66,6 +70,28 @@ def _save_telegram_codes(db: Session, parsed: list[dict]):
             count += 1
     db.commit()
     logger.info(f"Telegram: {count} new codes saved")
+
+
+def _expire_codes(db: Session, expired_pairs: list[tuple[str, str]]):
+    """Mark codes as expired based on Telegram signals (esgotado, desativado, strikethrough)."""
+    count = 0
+    for code_text, platform in expired_pairs:
+        existing = (
+            db.query(PromoCode)
+            .filter(
+                PromoCode.code == code_text,
+                PromoCode.platform == platform,
+                PromoCode.status == CodeStatus.ACTIVE,
+            )
+            .first()
+        )
+        if existing:
+            existing.status = CodeStatus.EXPIRED
+            existing.confidence_score = 0.0
+            count += 1
+    db.commit()
+    if count:
+        logger.info(f"Expired {count} codes based on Telegram signals")
 
 
 def cleanup_old_codes():

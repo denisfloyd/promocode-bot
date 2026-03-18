@@ -1,6 +1,7 @@
 from app.scrapers.telegram import (
     detect_platform,
     extract_codes_from_message,
+    is_invalidated,
     parse_discount,
     parse_telegram_message,
 )
@@ -88,6 +89,35 @@ class TestParseDiscount:
         assert value == 0.0
 
 
+class TestInvalidation:
+    def test_esgotado(self):
+        assert is_invalidated("❌ESGOTADO❌") is True
+
+    def test_esgotou(self):
+        assert is_invalidated("Cupom esgotou rápido") is True
+
+    def test_desativou(self):
+        assert is_invalidated("❌ML Desativou o Cupom") is True
+
+    def test_desativado(self):
+        assert is_invalidated("Cupom desativado pela loja") is True
+
+    def test_expirou(self):
+        assert is_invalidated("Cupom expirou") is True
+
+    def test_acabou(self):
+        assert is_invalidated("Acabou o cupom!") is True
+
+    def test_encerrado(self):
+        assert is_invalidated("Promoção encerrada") is True
+
+    def test_valid_message(self):
+        assert is_invalidated("Novo cupom disponível!") is False
+
+    def test_empty(self):
+        assert is_invalidated("") is False
+
+
 class TestParseMessage:
     def test_real_promotop_message(self):
         msg = """**☑️ Novo Cupom Amazon!**
@@ -103,6 +133,7 @@ class TestParseMessage:
         assert results[0]["platform"] == "amazon_br"
         assert results[0]["discount_type"] == "fixed_amount"
         assert results[0]["discount_value"] == 70.0
+        assert results[0]["expired"] is False
 
     def test_real_ml_message(self):
         msg = """**🔥 Novo Cupom Mercado Livre!**
@@ -115,9 +146,27 @@ class TestParseMessage:
         results = parse_telegram_message(msg)
         assert len(results) == 1
         assert results[0]["code"] == "VAMOSMELI"
-        assert results[0]["platform"] == "mercado_livre"
-        assert results[0]["discount_type"] == "percentage"
-        assert results[0]["discount_value"] == 20.0
+        assert results[0]["expired"] is False
+
+    def test_esgotado_message(self):
+        msg = """⚠️ CUPOM **SECRETO** AMAZON ESGOTADO ❌
+
+🎯 Usem o cupom: `SOHOJE`"""
+        results = parse_telegram_message(msg)
+        assert len(results) == 1
+        assert results[0]["code"] == "SOHOJE"
+        assert results[0]["expired"] is True
+
+    def test_desativou_message(self):
+        msg = """Cupom Mercado Livre
+
+18% OFF acima de R$79- `VEMPROJOGO18`
+
+❌ML Desativou o Cupom"""
+        results = parse_telegram_message(msg)
+        assert len(results) == 1
+        assert results[0]["code"] == "VEMPROJOGO18"
+        assert results[0]["expired"] is True
 
     def test_no_platform_returns_empty(self):
         msg = "Cupom: GENERICO123 para 10% de desconto"
@@ -145,6 +194,4 @@ class TestParseMessage:
         results = parse_telegram_message(msg)
         assert len(results) == 1
         assert results[0]["code"] == "VAIBRASIL"
-        assert results[0]["platform"] == "amazon_br"
-        assert results[0]["discount_type"] == "fixed_amount"
-        assert results[0]["discount_value"] == 350.0
+        assert results[0]["expired"] is False

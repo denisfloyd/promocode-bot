@@ -28,6 +28,7 @@ FALSE_POSITIVES = {
     "COMO", "PARA", "PEGA", "VALE", "SUPER", "MEGA", "MELHOR",
     "SHOPEE", "NOVO", "NOVA", "CADA", "ACABA", "ATENÇÃO",
     "NOITE", "MELI", "BAIXOU", "PREÇO", "ULTIMO",
+    "SECRETO", "ATIVE", "ATIVOU", "VOLTOU", "CORRE",
 }
 
 PLATFORM_KEYWORDS = {
@@ -46,6 +47,12 @@ DISCOUNT_PATTERNS = [
     # "Frete grátis"
     (re.compile(r"frete\s+(?:grátis|gratuito|free|gr[aá]tis)", re.IGNORECASE), "free_shipping"),
 ]
+
+# Keywords that indicate a code is no longer valid
+INVALIDATION_KEYWORDS = re.compile(
+    r"esgotou|esgotado|desativou|desativado|expirou|expirad[oa]|acabou|encerrad[oa]|finalizad[oa]",
+    re.IGNORECASE,
+)
 
 
 def extract_codes_from_message(text: str) -> list[str]:
@@ -81,8 +88,39 @@ def parse_discount(text: str) -> tuple[str, float]:
     return "percentage", 0.0
 
 
-def parse_telegram_message(text: str) -> list[dict]:
-    """Parse a Telegram message and extract promo code data."""
+def is_invalidated(text: str) -> bool:
+    """Check if the message indicates the code is no longer valid."""
+    return bool(INVALIDATION_KEYWORDS.search(text))
+
+
+def get_struck_codes(text: str, entities: list | None) -> set[str]:
+    """Find codes that appear inside strikethrough text regions."""
+    if not entities:
+        return set()
+
+    try:
+        from telethon.tl.types import MessageEntityStrike
+    except ImportError:
+        return set()
+
+    struck_codes = set()
+    for entity in entities:
+        if isinstance(entity, MessageEntityStrike):
+            struck_text = text[entity.offset:entity.offset + entity.length]
+            # Extract any codes from the struck-through region
+            for pattern in CODE_PATTERNS:
+                for match in pattern.finditer(struck_text):
+                    struck_codes.add(match.group(1).upper())
+
+    return struck_codes
+
+
+def parse_telegram_message(text: str, entities: list | None = None) -> list[dict]:
+    """Parse a Telegram message and extract promo code data.
+
+    Returns list of dicts with an 'expired' key indicating if the code
+    was marked as invalid in the message.
+    """
     if not text:
         return []
 
@@ -96,14 +134,25 @@ def parse_telegram_message(text: str) -> list[dict]:
 
     discount_type, discount_value = parse_discount(text)
 
-    # Clean description: remove markdown, take first meaningful line
-    clean = re.sub(r"[*_`~]", "", text)  # remove markdown
-    clean = re.sub(r"https?://\S+", "", clean)  # remove URLs
+    # Check if the whole message says "esgotado" etc
+    message_invalidated = is_invalidated(text)
+
+    # Check which codes are inside strikethrough
+    struck_codes = get_struck_codes(text, entities)
+
+    # Clean description
+    clean = re.sub(r"[*_`~]", "", text)
+    clean = re.sub(r"https?://\S+", "", clean)
     lines = [l.strip() for l in clean.split("\n") if l.strip() and len(l.strip()) > 5]
     description = lines[0][:120] if lines else text[:120]
 
     results = []
     for code in codes:
+        # A code is expired if:
+        # 1. The message has invalidation keywords (esgotado, desativou, etc.)
+        # 2. The code appears inside strikethrough text
+        expired = message_invalidated or code in struck_codes
+
         results.append({
             "code": code,
             "platform": platform,
@@ -111,6 +160,7 @@ def parse_telegram_message(text: str) -> list[dict]:
             "discount_type": discount_type,
             "discount_value": discount_value,
             "source_url": "telegram",
+            "expired": expired,
         })
 
     return results
@@ -134,33 +184,47 @@ async def monitor_telegram_channels():
         await client.start()
 
         all_codes = []
+        expired_codes = set()
+
         for channel_name in channels:
             try:
                 channel = await client.get_entity(channel_name)
                 channel_codes = []
                 async for message in client.iter_messages(channel, limit=50):
                     if message.text:
-                        parsed = parse_telegram_message(message.text)
-                        channel_codes.extend(parsed)
+                        parsed = parse_telegram_message(message.text, message.entities)
+                        for item in parsed:
+                            if item.get("expired"):
+                                expired_codes.add((item["code"], item["platform"]))
+                            else:
+                                channel_codes.append(item)
                 all_codes.extend(channel_codes)
-                logger.info(f"@{channel_name}: found {len(channel_codes)} codes in 50 messages")
+                logger.info(f"@{channel_name}: found {len(channel_codes)} active codes")
             except Exception as e:
                 logger.error(f"Failed to fetch from @{channel_name}: {e}")
 
         await client.disconnect()
 
+        # Remove codes that were marked as expired in any channel
+        active = [c for c in all_codes if (c["code"], c["platform"]) not in expired_codes]
+
         # Deduplicate by code+platform
         seen = set()
         unique = []
-        for c in all_codes:
+        for c in active:
             key = (c["code"], c["platform"])
             if key not in seen:
                 seen.add(key)
+                # Remove the 'expired' key before returning
+                c.pop("expired", None)
                 unique.append(c)
 
-        logger.info(f"Telegram total: {len(unique)} unique codes from {len(channels)} channels")
-        return unique
+        if expired_codes:
+            logger.info(f"Telegram: {len(expired_codes)} codes marked as expired (esgotado/desativado/struck)")
+
+        logger.info(f"Telegram total: {len(unique)} active unique codes from {len(channels)} channels")
+        return unique, list(expired_codes)
 
     except Exception as e:
         logger.error(f"Telegram connection failed: {e}")
-        return []
+        return [], []
