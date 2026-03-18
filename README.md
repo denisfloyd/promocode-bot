@@ -15,13 +15,13 @@ Stop hunting through Facebook groups, Instagram, and chat groups for promo codes
 
 | Source | Type | Description |
 |---|---|---|
-| **Promobit** | Automated scraping | Extracts structured coupon data from Promobit's store pages (Amazon, ML) |
+| ~~**Promobit**~~ | ~~Automated scraping~~ | ~~Extracts structured coupon data from Promobit's store pages~~ (removed — data was outdated) |
 | **Telegram** | Channel monitoring | Monitors public Brazilian coupon channels for promo codes |
 | **Community** | User submissions | Anyone can submit codes via `POST /api/v1/codes` |
 
 ## Features
 
-- **3 independent data sources** — Promobit scraping, Telegram channels, community submissions
+- **2 active data sources** — Telegram channels and community submissions
 - **Confidence scoring** — codes ranked by vote ratio, freshness, and source reliability
 - **Crowdsourced validation** — users report whether codes worked or not
 - **Source tracking** — every code shows where it came from (`promobit`, `telegram`, `community`)
