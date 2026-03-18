@@ -13,3 +13,4 @@ dist/
 *.session
 .DS_Store
 =*
+*session*
