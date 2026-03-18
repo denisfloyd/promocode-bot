@@ -1,5 +1,5 @@
 [project]
-name = "promocode-ai"
+name = "promocode-bot"
 version = "0.1.0"
 description = "Public API aggregating promo codes from Brazilian e-commerce platforms"
 requires-python = ">=3.12"

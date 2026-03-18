@@ -1,4 +1,4 @@
-# PromoCode AI
+# PromoCode Bot
 
 Public REST API that aggregates promotional codes from Brazilian e-commerce platforms into a single, searchable interface. Codes are collected from multiple sources, validated through crowdsourced feedback, and ranked by a confidence score.
 
@@ -43,7 +43,7 @@ Stop hunting through Facebook groups, Instagram, and chat groups for promo codes
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/promocode-ai.git
+git clone https://github.com/your-username/promocode-bot.git
 cd promocode-ai
 python3 -m venv .venv
 source .venv/bin/activate  # or: source .venv/bin/activate.fish

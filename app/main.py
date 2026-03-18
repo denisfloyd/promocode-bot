@@ -17,7 +17,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_lim
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="PromoCode AI",
+        title="PromoCode Bot",
         description="Public API aggregating promo codes from Brazilian e-commerce platforms",
         version="0.1.0",
     )
