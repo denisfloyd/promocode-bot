@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<section id="stats-container"
+         hx-get="/dashboard/stats"
+         hx-trigger="load, every 300s"
+         hx-swap="innerHTML">
+    <p aria-busy="true">Loading stats...</p>
+</section>
+
+<section>
+    <div id="controls-container">
+        <div class="controls">
+            <label>
+                Platform
+                <select name="platform"
+                        hx-get="/dashboard/codes"
+                        hx-target="#codes-container"
+                        hx-include=".controls select"
+                        hx-trigger="change">
+                    <option value="">All</option>
+                    <option value="amazon_br">Amazon BR</option>
+                    <option value="mercado_livre">Mercado Livre</option>
+                </select>
+            </label>
+            <label>
+                Sort by
+                <select name="sort_by"
+                        hx-get="/dashboard/codes"
+                        hx-target="#codes-container"
+                        hx-include=".controls select"
+                        hx-trigger="change">
+                    <option value="confidence_score">Confidence</option>
+                    <option value="created_at">Newest</option>
+                    <option value="discount_value">Discount</option>
+                </select>
+            </label>
+            <label>
+                Min Confidence
+                <select name="min_confidence"
+                        hx-get="/dashboard/codes"
+                        hx-target="#codes-container"
+                        hx-include=".controls select"
+                        hx-trigger="change">
+                    <option value="">Any</option>
+                    <option value="0.3">0.3+</option>
+                    <option value="0.5">0.5+</option>
+                    <option value="0.7">0.7+</option>
+                </select>
+            </label>
+            <button id="scrape-btn"
+                    hx-post="/dashboard/scrape"
+                    hx-target="#scrape-status"
+                    hx-swap="innerHTML"
+                    hx-headers='js:{"X-Admin-Token": document.cookie.replace(/(?:(?:^|.*;\s*)admin_token\s*=\s*([^;]*).*$)|^.*$/, "$1")}'>
+                Trigger Scrape
+            </button>
+            <small id="scrape-status"></small>
+        </div>
+    </div>
+
+    <div id="codes-container"
+         hx-get="/dashboard/codes"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <p aria-busy="true">Loading codes...</p>
+    </div>
+</section>
+{% endblock %}

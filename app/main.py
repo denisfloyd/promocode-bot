@@ -61,11 +61,13 @@ def create_app() -> FastAPI:
     from app.api.codes import router as codes_router
     from app.api.platforms import router as platforms_router
     from app.api.stats import router as stats_router
+    from app.dashboard import router as dashboard_router
 
     app.include_router(codes_router, prefix="/api/v1")
     app.include_router(platforms_router, prefix="/api/v1")
     app.include_router(stats_router, prefix="/api/v1")
     app.include_router(admin_router, prefix="/api/v1")
+    app.include_router(dashboard_router)
 
     return app
 
