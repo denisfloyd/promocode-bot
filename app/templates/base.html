@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}PromoCode Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        :root {
+            --pico-font-size: 87.5%;
+        }
+        .code-text {
+            font-family: monospace;
+            cursor: pointer;
+            user-select: all;
+        }
+        .code-text:hover::after {
+            content: " (copy)";
+            font-size: 0.75em;
+            opacity: 0.6;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.15em 0.5em;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        .badge-amazon { background: #ff9900; color: #000; }
+        .badge-mercado { background: #ffe600; color: #000; }
+        .confidence-bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        .confidence-bar::-webkit-progress-bar { background: var(--pico-muted-border-color); border-radius: 4px; }
+        .confidence-bar::-webkit-progress-value { border-radius: 4px; }
+        .confidence-high::-webkit-progress-value { background: #2ecc71; }
+        .confidence-mid::-webkit-progress-value { background: #f1c40f; }
+        .confidence-low::-webkit-progress-value { background: #e74c3c; }
+        .confidence-high::-moz-progress-bar { background: #2ecc71; }
+        .confidence-mid::-moz-progress-bar { background: #f1c40f; }
+        .confidence-low::-moz-progress-bar { background: #e74c3c; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+        .stats-grid article {
+            text-align: center;
+            margin: 0;
+        }
+        .stats-grid article h2 {
+            margin-bottom: 0;
+        }
+        .vote-btn {
+            padding: 0.25em 0.5em;
+            font-size: 0.85em;
+            margin: 0 0.15em;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: end;
+            margin-bottom: 1rem;
+        }
+        .controls label {
+            margin-bottom: 0;
+        }
+        .controls select {
+            margin-bottom: 0;
+            min-width: 140px;
+        }
+        .flash {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 999;
+            animation: fadeout 2s forwards 1s;
+        }
+        @keyframes fadeout {
+            to { opacity: 0; display: none; }
+        }
+        /* Mobile: stack table as cards */
+        @media (max-width: 768px) {
+            table thead { display: none; }
+            table tr {
+                display: block;
+                margin-bottom: 1rem;
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: 8px;
+                padding: 0.75rem;
+            }
+            table td {
+                display: flex;
+                justify-content: space-between;
+                padding: 0.25rem 0;
+                border: none;
+            }
+            table td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                margin-right: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <nav>
+            <ul><li><strong>PromoCode Dashboard</strong></li></ul>
+        </nav>
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+        function copyCode(text) {
+            navigator.clipboard.writeText(text);
+            const flash = document.createElement('div');
+            flash.className = 'flash';
+            flash.innerHTML = '<article>Copied!</article>';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 3000);
+        }
+    </script>
+</body>
+</html>
