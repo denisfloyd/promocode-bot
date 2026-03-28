@@ -1,0 +1,115 @@
+{% if codes %}
+<figure>
+<table>
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Platform</th>
+            <th>Discount</th>
+            <th>Confidence</th>
+            <th>Votes</th>
+            <th>Age</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for code in codes %}
+        <tr id="code-row-{{ code.id }}">
+            <td data-label="Code">
+                <span class="code-text" onclick="copyCode('{{ code.code }}')">{{ code.code }}</span>
+            </td>
+            <td data-label="Platform">
+                {% if code.platform == "amazon_br" %}
+                    <span class="badge badge-amazon">Amazon</span>
+                {% else %}
+                    <span class="badge badge-mercado">ML</span>
+                {% endif %}
+            </td>
+            <td data-label="Discount">
+                {% if code.discount_type == "percentage" %}
+                    {{ code.discount_value | int }}% OFF
+                {% elif code.discount_type == "fixed_amount" %}
+                    R${{ code.discount_value | int }} OFF
+                {% else %}
+                    Free Shipping
+                {% endif %}
+            </td>
+            <td data-label="Confidence">
+                {% set pct = (code.confidence_score * 100) | int %}
+                {% if code.confidence_score > 0.7 %}
+                    {% set level = "high" %}
+                {% elif code.confidence_score > 0.4 %}
+                    {% set level = "mid" %}
+                {% else %}
+                    {% set level = "low" %}
+                {% endif %}
+                <progress class="confidence-bar confidence-{{ level }}" value="{{ pct }}" max="100"></progress>
+                <small>{{ pct }}%</small>
+            </td>
+            <td data-label="Votes">
+                {{ code.votes_worked }}W / {{ code.votes_failed }}F
+            </td>
+            <td data-label="Age">
+                {% set delta = now - code.created_at %}
+                {% if delta.days > 0 %}
+                    {{ delta.days }}d ago
+                {% else %}
+                    {% set hours = (delta.seconds // 3600) %}
+                    {% if hours > 0 %}
+                        {{ hours }}h ago
+                    {% else %}
+                        {{ (delta.seconds // 60) }}m ago
+                    {% endif %}
+                {% endif %}
+            </td>
+            <td data-label="Actions">
+                <button class="vote-btn outline"
+                        hx-post="/dashboard/codes/{{ code.id }}/vote?worked=true"
+                        hx-target="#code-row-{{ code.id }}"
+                        hx-swap="outerHTML">
+                    +
+                </button>
+                <button class="vote-btn outline secondary"
+                        hx-post="/dashboard/codes/{{ code.id }}/vote?worked=false"
+                        hx-target="#code-row-{{ code.id }}"
+                        hx-swap="outerHTML">
+                    -
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</figure>
+
+{% if total_pages > 1 %}
+<nav>
+    <ul>
+        {% if page > 1 %}
+        <li>
+            <a href="#"
+               hx-get="/dashboard/codes?page={{ page - 1 }}&platform={{ platform }}&sort_by={{ sort_by }}&min_confidence={{ min_confidence }}&per_page={{ per_page }}"
+               hx-target="#codes-container"
+               hx-swap="innerHTML">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        <li><small>Page {{ page }} of {{ total_pages }} ({{ total }} codes)</small></li>
+        {% if page < total_pages %}
+        <li>
+            <a href="#"
+               hx-get="/dashboard/codes?page={{ page + 1 }}&platform={{ platform }}&sort_by={{ sort_by }}&min_confidence={{ min_confidence }}&per_page={{ per_page }}"
+               hx-target="#codes-container"
+               hx-swap="innerHTML">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<p>No codes found.</p>
+{% endif %}
