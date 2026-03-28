@@ -14,69 +14,7 @@
     </thead>
     <tbody>
         {% for code in codes %}
-        <tr id="code-row-{{ code.id }}">
-            <td data-label="Code">
-                <span class="code-text" onclick="copyCode('{{ code.code }}')">{{ code.code }}</span>
-            </td>
-            <td data-label="Platform">
-                {% if code.platform == "amazon_br" %}
-                    <span class="badge badge-amazon">Amazon</span>
-                {% else %}
-                    <span class="badge badge-mercado">ML</span>
-                {% endif %}
-            </td>
-            <td data-label="Discount">
-                {% if code.discount_type == "percentage" %}
-                    {{ code.discount_value | int }}% OFF
-                {% elif code.discount_type == "fixed_amount" %}
-                    R${{ code.discount_value | int }} OFF
-                {% else %}
-                    Free Shipping
-                {% endif %}
-            </td>
-            <td data-label="Confidence">
-                {% set pct = (code.confidence_score * 100) | int %}
-                {% if code.confidence_score > 0.7 %}
-                    {% set level = "high" %}
-                {% elif code.confidence_score > 0.4 %}
-                    {% set level = "mid" %}
-                {% else %}
-                    {% set level = "low" %}
-                {% endif %}
-                <progress class="confidence-bar confidence-{{ level }}" value="{{ pct }}" max="100"></progress>
-                <small>{{ pct }}%</small>
-            </td>
-            <td data-label="Votes">
-                {{ code.votes_worked }}W / {{ code.votes_failed }}F
-            </td>
-            <td data-label="Age">
-                {% set delta = now - code.created_at %}
-                {% if delta.days > 0 %}
-                    {{ delta.days }}d ago
-                {% else %}
-                    {% set hours = (delta.seconds // 3600) %}
-                    {% if hours > 0 %}
-                        {{ hours }}h ago
-                    {% else %}
-                        {{ (delta.seconds // 60) }}m ago
-                    {% endif %}
-                {% endif %}
-            </td>
-            <td data-label="Actions">
-                <button class="vote-btn outline"
-                        hx-post="/dashboard/codes/{{ code.id }}/vote?worked=true"
-                        hx-target="#code-row-{{ code.id }}"
-                        hx-swap="outerHTML">
-                    +
-                </button>
-                <button class="vote-btn outline secondary"
-                        hx-post="/dashboard/codes/{{ code.id }}/vote?worked=false"
-                        hx-target="#code-row-{{ code.id }}"
-                        hx-swap="outerHTML">
-                    -
-                </button>
-            </td>
-        </tr>
+        {% include "partials/code_row.html" %}
         {% endfor %}
     </tbody>
 </table>

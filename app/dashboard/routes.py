@@ -1,13 +1,16 @@
+import hashlib
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.promo_code import CodeStatus, PromoCode
+from app.models.promo_code import CodeFeedback, CodeStatus, PromoCode
+from app.services.confidence import recalculate_confidence
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
@@ -82,4 +85,51 @@ def codes_partial(
             "min_confidence": min_confidence,
             "now": datetime.utcnow(),
         },
+    )
+
+
+@router.post("/codes/{code_id}/vote")
+def vote_partial(
+    code_id: str,
+    worked: bool,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    code = db.query(PromoCode).filter(PromoCode.id == code_id).first()
+    if not code:
+        return HTMLResponse("<small>Code not found</small>", status_code=200)
+
+    client_ip = request.client.host if request.client else "unknown"
+    ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()
+    today = date.today()
+
+    existing = (
+        db.query(CodeFeedback)
+        .filter(
+            CodeFeedback.code_id == code_id,
+            CodeFeedback.ip_hash == ip_hash,
+            CodeFeedback.created_at >= datetime.combine(today, datetime.min.time()),
+        )
+        .first()
+    )
+    if existing:
+        return HTMLResponse("<small>Already voted today</small>", status_code=200)
+
+    fb = CodeFeedback(code_id=code_id, worked=worked, ip_hash=ip_hash)
+    db.add(fb)
+
+    if worked:
+        code.votes_worked += 1
+    else:
+        code.votes_failed += 1
+
+    code.confidence_score = recalculate_confidence(code)
+    db.commit()
+    db.refresh(code)
+
+    now = datetime.utcnow()  # Use naive datetime to match SQLite naive timestamps
+    return templates.TemplateResponse(
+        request,
+        "partials/code_row.html",
+        {"code": code, "now": now},
     )
