@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.promo_code import CodeFeedback, CodeStatus, PromoCode
 from app.services.confidence import recalculate_confidence
@@ -133,3 +134,23 @@ def vote_partial(
         "partials/code_row.html",
         {"code": code, "now": now},
     )
+
+
+@router.post("/scrape")
+def scrape_trigger(request: Request):
+    # Read token from header (HTMX sends it) or cookie
+    token = request.headers.get("X-Admin-Token") or request.cookies.get("admin_token")
+    if not token or token != settings.admin_token:
+        return HTMLResponse("<small>Invalid or missing admin token. Set cookie first.</small>")
+
+    from app.services.scheduler import run_telegram_job, _executor
+
+    _executor.submit(run_telegram_job)
+    return HTMLResponse("<small>Scrape triggered!</small>")
+
+
+@router.post("/set-token")
+def set_admin_token(admin_token: str = Form(...)):
+    response = HTMLResponse("<small>Token saved!</small>")
+    response.set_cookie(key="admin_token", value=admin_token, httponly=False, samesite="strict")
+    return response
