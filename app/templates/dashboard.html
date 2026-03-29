@@ -55,6 +55,18 @@
                 Trigger Scrape
             </button>
             <small id="scrape-status"></small>
+            <details>
+                <summary>Admin</summary>
+                <form hx-post="/dashboard/set-token"
+                      hx-target="#token-status"
+                      hx-swap="innerHTML">
+                    <fieldset role="group">
+                        <input type="password" name="admin_token" placeholder="Admin token">
+                        <button type="submit">Save</button>
+                    </fieldset>
+                </form>
+                <small id="token-status"></small>
+            </details>
         </div>
     </div>
 
