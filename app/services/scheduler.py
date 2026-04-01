@@ -102,12 +102,12 @@ def cleanup_old_codes():
         cutoff = now - timedelta(hours=24)
 
         # Delete codes that are:
-        # - older than 24h (not re-seen by any source)
+        # - created more than 24h ago
         # - have no "worked" votes (no user confirmed them)
         old_codes = (
             db.query(PromoCode)
             .filter(
-                PromoCode.updated_at < cutoff,
+                PromoCode.created_at < cutoff,
                 PromoCode.votes_worked == 0,
             )
             .all()

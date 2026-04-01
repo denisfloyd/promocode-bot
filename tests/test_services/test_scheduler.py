@@ -89,7 +89,7 @@ def test_cleanup_deletes_old_codes_no_votes(scheduler_db, monkeypatch):
         source_url="telegram",
         votes_worked=0,
         votes_failed=0,
-        updated_at=old_time,
+        created_at=old_time,
     )
     scheduler_db.add(code)
     scheduler_db.commit()
@@ -141,7 +141,7 @@ def test_cleanup_keeps_old_codes_with_votes(scheduler_db, monkeypatch):
         source_url="telegram",
         votes_worked=3,
         votes_failed=1,
-        updated_at=old_time,
+        created_at=old_time,
     )
     scheduler_db.add(code)
     scheduler_db.commit()

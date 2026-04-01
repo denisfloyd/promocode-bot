@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 
 from app.config import settings
 
@@ -185,12 +186,15 @@ async def monitor_telegram_channels():
 
         all_codes = []
         expired_codes = set()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
 
         for channel_name in channels:
             try:
                 channel = await client.get_entity(channel_name)
                 channel_codes = []
                 async for message in client.iter_messages(channel, limit=50):
+                    if message.date and message.date < cutoff:
+                        break
                     if message.text:
                         parsed = parse_telegram_message(message.text, message.entities)
                         for item in parsed:
