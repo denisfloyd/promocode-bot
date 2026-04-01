@@ -30,6 +30,7 @@ Stop hunting through Facebook groups, Instagram, and chat groups for promo codes
 - **Pagination** — configurable page size (max 100 per page)
 - **Rate limiting** — 60 requests/minute per IP
 - **Admin controls** — trigger scrapers and Telegram on demand
+- **Dashboard** — built-in HTMX dashboard at `/dashboard` for monitoring codes, stats, and triggering scrapers
 - **Auto-generated docs** — Swagger UI at `/docs`
 - **Zero cost** — SQLite, in-memory cache, in-process scheduler. No Redis, no Celery, no external services
 
@@ -96,13 +97,33 @@ python -m app.main
 
 The API will be available at `http://localhost:8000`.
 
-Interactive docs at `http://localhost:8000/docs`.
+Dashboard at `http://localhost:8000/dashboard`.
+
+Interactive API docs at `http://localhost:8000/docs`.
 
 On first startup, the app automatically:
 - Creates the SQLite database
 - Seeds Amazon BR and Mercado Livre as scraping sources
 - Starts the scheduler (scrapes every 30 minutes)
 - Starts Telegram monitoring (if configured)
+
+---
+
+## Dashboard
+
+The built-in dashboard at `/dashboard` provides a visual interface for monitoring and managing promo codes. No separate frontend deployment needed — it's served directly from the FastAPI app.
+
+**Features:**
+- **Stats overview** — active codes, per-platform counts, expired codes (auto-refreshes every 5 min)
+- **Codes table** — filterable by platform and minimum confidence, sortable by newest/confidence/discount
+- **Inline voting** — thumbs up/down buttons update the row instantly via HTMX
+- **Scrape trigger** — trigger Telegram scraping on demand (requires admin token)
+- **Responsive** — works on desktop and mobile (table converts to card layout)
+- **Dark mode** — enabled by default
+
+**Tech:** Server-rendered HTML with [HTMX](https://htmx.org) for dynamic updates, [Pico CSS](https://picocss.com) for styling. No JavaScript framework, no build step.
+
+**Admin token setup:** Click the "Admin" dropdown in the controls bar, enter your `ADMIN_TOKEN`, and click Save. The token is stored as a browser cookie for subsequent scrape triggers.
 
 ---
 
@@ -453,6 +474,7 @@ API Request
 | HTTP Client | httpx | Async, modern |
 | HTML Parser | BeautifulSoup4 | Battle-tested |
 | Telegram | Telethon | Full Telegram client API |
+| Dashboard | HTMX + Jinja2 + Pico CSS | No build step, no JS framework |
 | Rate Limiter | slowapi | Lightweight |
 | Validation | Pydantic v2 | Comes with FastAPI |
 | Testing | pytest | Standard |
@@ -480,6 +502,16 @@ promocode-ai/
 │   │   ├── platforms.py      # /platforms
 │   │   ├── stats.py          # /stats
 │   │   └── admin.py          # /admin/scrape/*, /admin/scrape/telegram
+│   ├── dashboard/
+│   │   ├── __init__.py       # Dashboard router
+│   │   └── routes.py         # Dashboard routes (stats, codes, vote, scrape)
+│   ├── templates/
+│   │   ├── base.html          # Layout with Pico CSS + HTMX
+│   │   ├── dashboard.html     # Main dashboard page
+│   │   └── partials/
+│   │       ├── stats_cards.html   # Stats grid partial
+│   │       ├── codes_table.html   # Codes table partial
+│   │       └── code_row.html      # Single row partial (for HTMX vote swap)
 │   ├── scrapers/
 │   │   ├── base.py           # BaseScraper (abstract)
 │   │   ├── amazon_br.py      # Amazon BR via Promobit
@@ -490,9 +522,10 @@ promocode-ai/
 │       └── scheduler.py      # APScheduler jobs (scrapers + Telegram)
 ├── scripts/
 │   └── telegram_setup.py    # One-time Telegram authentication
-├── tests/                    # 97 tests
+├── tests/                    # 128 tests
 │   ├── conftest.py           # Shared fixtures
 │   ├── test_api/             # API endpoint tests
+│   ├── test_dashboard/       # Dashboard route tests
 │   ├── test_scrapers/        # Scraper + Telegram parser tests
 │   └── test_services/        # Service tests
 ├── pyproject.toml
@@ -518,7 +551,7 @@ promocode-ai/
 .venv/bin/python -m pytest --cov=app
 ```
 
-**Current test count: 97 tests**
+**Current test count: 128 tests**
 
 | Test Suite | Tests | What's Tested |
 |---|---|---|
@@ -533,7 +566,8 @@ promocode-ai/
 | `test_mercado_livre` | 8 | JSON extraction, CUPOM NO LINK handling, filtering |
 | `test_telegram` | 25 | Code extraction, platform detection, discount parsing, real messages |
 | `test_confidence` | 11 | Bayesian scoring, freshness decay, full formula |
-| `test_scheduler` | 4 | Code saving, dedup, expiry, source reliability |
+| `test_scheduler` | 6 | Code saving, dedup, cleanup, expiry |
+| `test_dashboard` | 16 | Stats, codes table, filtering, voting, scrape trigger, admin token, integration |
 
 ---
 
@@ -563,7 +597,7 @@ When deployed behind a load balancer or reverse proxy, configure your proxy to p
 - [x] Source tracking per code
 - [ ] More platforms (Americanas, Magazine Luiza, Shopee, iFood)
 - [ ] Telegram/WhatsApp bot consuming the API
-- [ ] Web frontend
+- [x] Web dashboard (HTMX + Pico CSS)
 - [ ] Browser extension (auto-apply codes at checkout)
 - [ ] API key authentication for usage tracking
 - [ ] PostgreSQL + Redis migration for scale
