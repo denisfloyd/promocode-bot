@@ -48,7 +48,7 @@ def stats_partial(request: Request, db: Session = Depends(get_db)):
 def codes_partial(
     request: Request,
     platform: str = "",
-    sort_by: str = "confidence_score",
+    sort_by: str = "created_at",
     min_confidence: str = "",
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
