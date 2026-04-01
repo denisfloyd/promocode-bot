@@ -47,7 +47,9 @@ class PromoCode(Base):
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
-    feedbacks: Mapped[list["CodeFeedback"]] = relationship(back_populates="promo_code")
+    feedbacks: Mapped[list["CodeFeedback"]] = relationship(
+        back_populates="promo_code", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("code", "platform", name="uq_code_platform"),
